@@ -1,0 +1,40 @@
+Import-Module ActiveDirectory
+$ou = "OU=Computer,DC=MYDOMAIN,DC=com"
+$owner = "MYDOMAIN\USER"
+$computerNames = Get-Clipboard
+
+foreach ($computerName in $computerNames) {
+    # Trim any whitespace
+    $computerName = $computerName.Trim()
+    if ($computerName) {
+    # Create the computer object in the specified OU
+    $newComputer = New-ADComputer -Name $computerName -Path $ou -PassThru
+        if ($newComputer) {
+        Write-Host "Created computer object: $computerName DN: $($Newcomputer.DistinguishedName)"
+            Start-Sleep -Seconds 5
+            try {
+                # Retrieve ComputerObject
+                $computer = Get-ADComputer -Identity $computerName
+
+                # Set the owner of the computer object
+                $computerDn = $Newcomputer.DistinguishedName
+                $ownerSid = (New-Object System.Security.Principal.NTAccount($owner)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+
+                # Get the security descriptor of the computer object
+                $sd = Get-ACL -Path "AD:$computerDn"
+
+                # Set the owner
+                $sd.SetOwner([System.Security.Principal.SecurityIdentifier] $ownerSid)
+
+                # Apply the updated security descriptor to the computer object
+                Set-ACL -Path "AD:$computerDn" -AclObject $sd
+
+                Write-Host "Computer object '$computerName' owner set to '$owner'."
+    } catch {
+        Write-Host "Failed to set Owner for $computerName"
+    }
+} else {
+        Write-Host "Failed to create computer object : $computerName"
+        }
+    }
+}
